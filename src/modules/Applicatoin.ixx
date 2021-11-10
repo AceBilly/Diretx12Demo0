@@ -52,6 +52,10 @@ void Application::createHardWare() {
   if (HRESULT hr = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0,
                                      IID_PPV_ARGS(&m_device));
       FAILED(hr)) {
-    ThrowIfFailed(m_factory->EnumWarpAdapter(IID_PPV_ARGS(&m_adapter)));
+    ThrowIfFailed(m_factory->EnumWarpAdapter(IID_PPV_ARGS(&m_adapter)), "Enum warp adapters failed!");
+    ThrowIfFailed(D3D12CreateDevice(m_adapter.Get(), D3D_FEATURE_LEVEL_11_0,
+                                    IID_PPV_ARGS(&m_device)),
+                  "Create device failed from wrap adapters");
+    
   }
 }
