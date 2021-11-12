@@ -30,6 +30,9 @@
     <ClCompile Include="src\modules\Adapters.ixx">
       <Filter>Source Files\modules</Filter>
     </ClCompile>
+    <ClCompile Include="src\modules\Windows.ixx">
+      <Filter>Source Files\modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="inc\unity.h">

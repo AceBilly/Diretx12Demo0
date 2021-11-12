@@ -21,13 +21,20 @@ export class T_Adapters {
   /// <returns></returns>
   const T_Adapters& operator*() const;
   void log() const;
-
+  IDXGIAdapter* get(const UINT index) const;
  private:
   std::vector<IDXGIAdapter*> m_adapters;
   UINT m_adaptersCount = 0;
 };
 
 module : private;
+
+IDXGIAdapter* T_Adapters::get(const UINT index) const {
+  if (index > m_adapters.size()) {
+    return nullptr;
+  }
+  return m_adapters[index];
+}
 
 T_Adapters::T_Adapters(IDXGIFactory* factory) {
   IDXGIAdapter* adapter = nullptr;
