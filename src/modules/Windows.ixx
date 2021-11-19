@@ -5,7 +5,7 @@ module;
 export module Windows;
 
 
-export class Windows {
+export class Win32Windows {
  public:
   HWND getMainWindowHandle() const;
  private:
@@ -14,4 +14,4 @@ export class Windows {
 
 module : private;
 
-HWND Windows::getMainWindowHandle() const { return m_windowHandle; }
+HWND Win32Windows::getMainWindowHandle() const { return m_windowHandle; }
