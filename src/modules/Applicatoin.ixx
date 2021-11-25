@@ -18,6 +18,8 @@ export class Application {
  public:
   void init();
 
+  void setViewPort();
+
  private:
   void enableDebugLayers(bool flag);
   void createHardWare(const UINT adaptersListIndex);
@@ -25,8 +27,7 @@ export class Application {
   void createSwapChain();
   void createDescriptorHeaps();
   void createRTV();
-
-  void currentBackBufferView();
+  void createDSV();
 
  private:
   std::unique_ptr<Win32Windows> mp_windows;  // 指向窗口对象。
@@ -35,6 +36,9 @@ export class Application {
   UINT m_width;            // 缓冲区宽高
   UINT m_height;
   UINT m_currentBackBuffer = 0;  // 当前后台缓冲区。
+
+  UINT m_mxaaCount = 1;
+  DXGI_FORMAT m_depthStencilFormat = DXGI_FORMAT_D16_UNORM;  // 深度/模板深度视图 缓冲区格式。
  private:
   // 基础对象
   ComPtr<ID3D12Debug> m_debugController;
@@ -48,10 +52,12 @@ export class Application {
   // 交换链
   ComPtr<IDXGISwapChain> m_swapChain;
   // 描述符堆
+  UINT m_RTVDecriptorSize;
   ComPtr<ID3D12DescriptorHeap> m_RTVHeap;  // 用于渲染目标
   ComPtr<ID3D12DescriptorHeap> m_DSVHeap;  // 用于深度视图
 
-  std::vector<ComPtr<ID3D12Resource>> m_swapChainBuffer;
+  std::vector<ComPtr<ID3D12Resource>> m_swapChainBuffer;  // RTV
+  ComPtr<ID3D12Resource> m_depthStencilBuffer;            // DSV
 };
 }  // namespace Ace
 module : private;
@@ -68,8 +74,8 @@ void Ace::Application::createSwapChain() {
                    .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
                    .ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED},
     // TODO: 抗锯齿 暂不做考虑
-        .SampleDesc = {.Count = 1,  // 采样率
-                       .Quality = 0},
+        .SampleDesc = {.Count = m_mxaaCount,  // 采样率
+                       .Quality = m_mxaaCount - 1},
     .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
     .BufferCount = m_bufferCount,
     .OutputWindow = mp_windows->getMainWindowHandle(), 
@@ -166,12 +172,54 @@ void Ace::Application::createDescriptorHeaps() {
   ThrowIfFailed(m_device->CreateDescriptorHeap(
                     &dsvHeapDesc, IID_PPV_ARGS(m_DSVHeap.GetAddressOf())),
                 "Create failed DescriptorHeap for Depth/Stencil view");
+  m_RTVDecriptorSize = m_device->GetDescriptorHandleIncrementSize(
+      D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
-void Ace::Application::currentBackBufferView() {
-    
-}
-
+/// <summary>
+/// 创建缓冲区资源。
+/// </summary>
 void Ace::Application::createRTV() {
-    
+  Ace::AceCpuDescriptorHandle handle(m_RTVHeap->GetCPUDescriptorHandleForHeapStart());
+  for (UINT i = 0; i < m_swapChainBuffer.size(); ++i) {
+    ThrowIfFailed(
+        m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_swapChainBuffer[i])),
+        "Get Buffer failed");
+    m_device->CreateRenderTargetView(m_swapChainBuffer[i].Get(), nullptr,
+                                     handle);
+    handle.offset(1, m_RTVDecriptorSize);
+  }
+}
+
+void Ace::Application::createDSV() { 
+    D3D12_RESOURCE_DESC dsvDesc = {
+    .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+    .Alignment = 0,
+    .Width = m_width,
+    .Height = m_height,
+    .DepthOrArraySize = 1,
+    .MipLevels = 1,
+    .Format = m_depthStencilFormat,
+    .SampleDesc = {.Count = m_mxaaCount, .Quality = m_mxaaCount - 1},
+    .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+    .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL};
+  D3D12_CLEAR_VALUE optClear{.Format = m_depthStencilFormat,
+                               .DepthStencil{.Depth = 1.0f, .Stencil = 0}
+  };
+    Ace::AceHeapProperties heapProperties(D3D12_HEAP_TYPE_DEFAULT);
+  Ace::AceResourceBarrier resourceBarrier = Ace::AceResourceBarrier::Transition(
+      m_depthStencilBuffer.Get(), D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            D3D12_RESOURCE_BARRIER_FLAG_NONE);
+    ThrowIfFailed(
+        m_device->CreateCommittedResource(
+          &heapProperties,
+            D3D12_HEAP_FLAG_NONE, &dsvDesc, D3D12_RESOURCE_STATE_COMMON,
+            &optClear, IID_PPV_ARGS(m_depthStencilBuffer.GetAddressOf())),
+        "Create DSV Failed");
+  m_device->CreateDepthStencilView(
+        m_depthStencilBuffer.Get(), nullptr,
+      m_DSVHeap->GetCPUDescriptorHandleForHeapStart());
+    m_commandList->ResourceBarrier(1, &resourceBarrier);
 }
